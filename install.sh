@@ -91,12 +91,24 @@ extract_dmg() {
     local dmg_path="$1"
     info "Extracting DMG with 7z..."
 
-    7z x -y "$dmg_path" -o"$WORK_DIR/dmg-extract" >&2 || \
-        error "Failed to extract DMG"
+    local seven_zip_status=0
+    if 7z x -y "$dmg_path" -o"$WORK_DIR/dmg-extract" >&2; then
+        seven_zip_status=0
+    else
+        seven_zip_status=$?
+    fi
 
     local app_dir
     app_dir=$(find "$WORK_DIR/dmg-extract" -maxdepth 3 -name "*.app" -type d | head -1)
-    [ -n "$app_dir" ] || error "Could not find .app bundle in DMG"
+    if [ -z "$app_dir" ]; then
+        error "Failed to extract DMG"
+    fi
+
+    # 7z can return non-zero for non-fatal warnings, such as the DMG's
+    # /Applications symlink being skipped as a "dangerous link path".
+    if [ "$seven_zip_status" -ne 0 ]; then
+        warn "7z reported extraction warnings (exit code $seven_zip_status); continuing"
+    fi
 
     info "Found: $(basename "$app_dir")"
     echo "$app_dir"
@@ -220,10 +232,60 @@ install_app() {
 create_start_script() {
     cat > "$INSTALL_DIR/start.sh" << 'SCRIPT'
 #!/bin/bash
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WEBVIEW_DIR="$SCRIPT_DIR/content/webview"
+LOG_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/codex-desktop"
+LOG_FILE="$LOG_DIR/launcher.log"
 
-pkill -f "http.server 5175" 2>/dev/null
+mkdir -p "$LOG_DIR"
+exec >>"$LOG_FILE" 2>&1
+
+echo "[$(date -Is)] Starting Codex Desktop launcher"
+
+find_codex_cli() {
+    if command -v codex >/dev/null 2>&1; then
+        command -v codex
+        return 0
+    fi
+
+    if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        # shellcheck disable=SC1090
+        . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+        if command -v codex >/dev/null 2>&1; then
+            command -v codex
+            return 0
+        fi
+    fi
+
+    local candidate
+    for candidate in \
+        "$HOME/.nvm/versions/node/current/bin/codex" \
+        "$HOME/.nvm/versions/node"/*/bin/codex \
+        "$HOME/.local/bin/codex" \
+        "/usr/local/bin/codex" \
+        "/usr/bin/codex"
+    do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+notify_error() {
+    local message="$1"
+    echo "$message"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "Codex Desktop" "$message"
+    fi
+}
+
+pkill -f "http.server 5175" 2>/dev/null || true
 sleep 0.3
 
 if [ -d "$WEBVIEW_DIR" ] && [ "$(ls -A "$WEBVIEW_DIR" 2>/dev/null)" ]; then
@@ -233,15 +295,20 @@ if [ -d "$WEBVIEW_DIR" ] && [ "$(ls -A "$WEBVIEW_DIR" 2>/dev/null)" ]; then
     trap "kill $HTTP_PID 2>/dev/null" EXIT
 fi
 
-export CODEX_CLI_PATH="${CODEX_CLI_PATH:-$(which codex 2>/dev/null)}"
+if [ -z "${CODEX_CLI_PATH:-}" ]; then
+    CODEX_CLI_PATH="$(find_codex_cli || true)"
+    export CODEX_CLI_PATH
+fi
 
 if [ -z "$CODEX_CLI_PATH" ]; then
-    echo "Error: Codex CLI not found. Install with: npm i -g @openai/codex"
+    notify_error "Codex CLI not found. Install with: npm i -g @openai/codex"
     exit 1
 fi
 
+echo "Using CODEX_CLI_PATH=$CODEX_CLI_PATH"
+
 cd "$SCRIPT_DIR"
-exec "$SCRIPT_DIR/electron" --no-sandbox "$@"
+exec "$SCRIPT_DIR/electron" --no-sandbox --class=codex-desktop "$@"
 SCRIPT
 
     chmod +x "$INSTALL_DIR/start.sh"
