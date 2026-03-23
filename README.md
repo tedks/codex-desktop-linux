@@ -77,6 +77,23 @@ Or add an alias to your shell:
 echo 'alias codex-desktop="~/codex-desktop-linux/codex-app/start.sh"' >> ~/.bashrc
 ```
 
+## Build a `.deb`
+
+After running the installer and generating `codex-app/`, you can build a Debian package:
+
+```bash
+./scripts/build-deb.sh
+```
+
+The output is written to `dist/` and can be installed with:
+
+```bash
+sudo dpkg -i dist/codex-desktop_*.deb
+```
+
+This installs the app under `/opt/codex-desktop`, adds a launcher in `/usr/bin/codex-desktop`,
+and registers a desktop entry for app menus.
+
 ### Custom install directory
 
 ```bash
