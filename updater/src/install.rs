@@ -25,6 +25,7 @@ pub fn installed_package_version() -> String {
 
 pub fn install_deb(path: &Path) -> Result<()> {
     anyhow::ensure!(path.exists(), "Debian package not found: {}", path.display());
+    ensure_upgrade_path(path)?;
 
     if command_exists("apt") {
         let mut command = apt_install_command(path)?;
@@ -54,6 +55,20 @@ fn run_install(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
+fn ensure_upgrade_path(path: &Path) -> Result<()> {
+    let installed = installed_package_version();
+    if installed == "unknown" {
+        return Ok(());
+    }
+
+    let candidate = deb_package_version(path)?;
+    anyhow::ensure!(
+        is_version_newer(&candidate, &installed)?,
+        "Refusing to install non-newer package version {candidate} over installed version {installed}"
+    );
+    Ok(())
+}
+
 fn apt_install_command(path: &Path) -> Result<Command> {
     let parent = path
         .parent()
@@ -77,6 +92,40 @@ fn dpkg_install_command(path: &Path) -> Command {
     let mut command = Command::new("dpkg");
     command.arg("-i").arg(path.as_os_str());
     command
+}
+
+fn deb_package_version(path: &Path) -> Result<String> {
+    let output = Command::new("dpkg-deb")
+        .arg("-f")
+        .arg(path)
+        .arg("Version")
+        .output()
+        .context("Failed to inspect Debian package metadata")?;
+
+    anyhow::ensure!(
+        output.status.success(),
+        "dpkg-deb could not read the package version from {}",
+        path.display()
+    );
+
+    let version = String::from_utf8(output.stdout)
+        .context("dpkg-deb returned a non-UTF8 package version")?
+        .trim()
+        .to_string();
+    anyhow::ensure!(
+        !version.is_empty(),
+        "dpkg-deb returned an empty package version for {}",
+        path.display()
+    );
+    Ok(version)
+}
+
+fn is_version_newer(candidate: &str, installed: &str) -> Result<bool> {
+    let status = Command::new("dpkg")
+        .args(["--compare-versions", candidate, "gt", installed])
+        .status()
+        .context("Failed to compare Debian package versions")?;
+    Ok(status.success())
 }
 
 fn command_exists(name: &str) -> bool {
@@ -126,6 +175,19 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["install", "-y", "./codex.deb"]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn compares_debian_versions_using_dpkg_rules() -> Result<()> {
+        assert!(is_version_newer(
+            "2026.03.24.220000+88f07cd3",
+            "2026.03.24.120000+afed8a8e"
+        )?);
+        assert!(!is_version_newer(
+            "2026.03.24.120000+88f07cd3",
+            "2026.03.24.120000+afed8a8e"
+        )?);
         Ok(())
     }
 }

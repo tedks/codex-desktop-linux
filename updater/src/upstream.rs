@@ -118,7 +118,7 @@ pub fn derive_candidate_version(sha256: &str, timestamp: DateTime<Utc>) -> Resul
         .ok_or_else(|| anyhow!("sha256 is too short to derive candidate version"))?;
     Ok(format!(
         "{}+{}",
-        timestamp.format("%Y.%m.%d"),
+        timestamp.format("%Y.%m.%d.%H%M%S"),
         short_hash
     ))
 }
@@ -185,7 +185,7 @@ mod tests {
             downloaded.sha256,
             "678cd508ffe0071e217020a7a4eecbebe25362c022ac78c13a5ae87b7a3a0c92"
         );
-        assert_eq!(downloaded.candidate_version, "2026.03.24+678cd508");
+        assert_eq!(downloaded.candidate_version, "2026.03.24.120000+678cd508");
         Ok(())
     }
 }
