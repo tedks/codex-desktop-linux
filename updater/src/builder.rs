@@ -4,6 +4,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use std::{
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
 };
@@ -39,6 +40,8 @@ pub async fn build_update(
     fs::create_dir_all(&logs_dir)
         .with_context(|| format!("Failed to create {}", logs_dir.display()))?;
 
+    let build_path = build_command_path();
+
     state.status = UpdateStatus::PreparingWorkspace;
     state.artifact_paths.workspace_dir = Some(workspace_dir.clone());
     state.save(&paths.state_file)?;
@@ -51,6 +54,7 @@ pub async fn build_update(
         Command::new(bundle_dir.join("install.sh"))
             .arg(dmg_path)
             .env("CODEX_INSTALL_DIR", &app_dir)
+            .env("PATH", &build_path)
             .current_dir(&bundle_dir),
         &install_log,
     )
@@ -69,6 +73,7 @@ pub async fn build_update(
                 "UPDATER_SERVICE_SOURCE",
                 bundle_dir.join("packaging/linux/codex-update-manager.service"),
             )
+            .env("PATH", &build_path)
             .current_dir(&bundle_dir),
         &build_log,
     )
@@ -156,6 +161,61 @@ fn find_deb_in(dist_dir: &Path) -> Result<PathBuf> {
     }
 
     anyhow::bail!("No .deb package found in {}", dist_dir.display())
+}
+
+fn build_command_path() -> OsString {
+    let mut entries = preferred_node_bin_dirs();
+    entries.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    std::env::join_paths(entries).unwrap_or_else(|_| std::env::var_os("PATH").unwrap_or_default())
+}
+
+fn preferred_node_bin_dirs() -> Vec<PathBuf> {
+    let nvm_root = std::env::var_os("NVM_DIR")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".nvm")));
+
+    let Some(nvm_root) = nvm_root else {
+        return Vec::new();
+    };
+
+    collect_nvm_bin_dirs(&nvm_root)
+}
+
+fn collect_nvm_bin_dirs(nvm_root: &Path) -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+
+    let current_bin = nvm_root.join("versions/node/current/bin");
+    if is_node_toolchain_dir(&current_bin) {
+        seen.insert(current_bin.clone());
+        directories.push(current_bin);
+    }
+
+    let versions_root = nvm_root.join("versions/node");
+    if let Ok(entries) = fs::read_dir(&versions_root) {
+        let mut version_bins = entries
+            .filter_map(|entry| entry.ok().map(|item| item.path().join("bin")))
+            .filter(|path| is_node_toolchain_dir(path))
+            .collect::<Vec<_>>();
+        version_bins.sort();
+        version_bins.reverse();
+
+        for path in version_bins {
+            if seen.insert(path.clone()) {
+                directories.push(path);
+            }
+        }
+    }
+
+    directories
+}
+
+fn is_node_toolchain_dir(path: &Path) -> bool {
+    ["node", "npm", "npx"]
+        .into_iter()
+        .all(|binary| path.join(binary).is_file())
 }
 
 async fn run_and_log(command: &mut Command, log_path: &Path) -> Result<()> {
@@ -277,6 +337,27 @@ touch "${DIST_DIR_OVERRIDE}/codex-desktop_${PACKAGE_VERSION}_amd64.deb"
             artifacts.deb_path.file_name().and_then(|value| value.to_str()),
             Some("codex-desktop_2026.03.24+abcd1234_amd64.deb")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn collects_nvm_toolchain_bins_with_current_first() -> Result<()> {
+        let temp = tempdir()?;
+        let nvm_root = temp.path().join(".nvm");
+        let current_bin = nvm_root.join("versions/node/current/bin");
+        let version_bin = nvm_root.join("versions/node/v24.2.0/bin");
+
+        fs::create_dir_all(&current_bin)?;
+        fs::create_dir_all(&version_bin)?;
+        for dir in [&current_bin, &version_bin] {
+            for binary in ["node", "npm", "npx"] {
+                fs::write(dir.join(binary), b"bin")?;
+            }
+        }
+
+        let directories = collect_nvm_bin_dirs(&nvm_root);
+        assert_eq!(directories.first(), Some(&current_bin));
+        assert!(directories.contains(&version_bin));
         Ok(())
     }
 }
