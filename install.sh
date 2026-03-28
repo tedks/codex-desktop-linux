@@ -62,7 +62,22 @@ $(dependency_help)"
 $(dependency_help)"
     fi
 
-    info "All dependencies found"
+    # Prefer modern 7-zip if available (required for APFS DMG)
+    if command -v 7zz &>/dev/null; then
+        SEVEN_ZIP_CMD="7zz"
+    else
+        SEVEN_ZIP_CMD="7z"
+    fi
+
+    if "$SEVEN_ZIP_CMD" | head -n 1 | grep -q "16.02"; then
+        error "Your 7-zip is too old to open modern APFS DMGs.
+Install a newer 7-zip (7zz), e.g.:
+  curl -L -o /tmp/7z.tar.xz https://www.7-zip.org/a/7z2409-linux-x64.tar.xz
+  tar -C /tmp -xf /tmp/7z.tar.xz
+  sudo install -m 755 /tmp/7zz /usr/local/bin/7zz"
+    fi
+
+    info "All dependencies found (using $SEVEN_ZIP_CMD)"
 }
 
 # ---- Download or find Codex DMG ----
@@ -355,10 +370,15 @@ if [ -d "$WEBVIEW_DIR" ] && [ "$(ls -A "$WEBVIEW_DIR" 2>/dev/null)" ]; then
     HTTP_PID=$!
     trap "kill $HTTP_PID 2>/dev/null" EXIT
 
-    if ! wait_for_webview_server; then
-        notify_error "Webview server failed to start on port 5175. Check python3 and port availability."
-        exit 1
-    fi
+    # Wait for the HTTP server to be ready (up to 5 seconds)
+    echo "Waiting for webview server..."
+    for i in $(seq 1 50); do
+        if python3 -c "import socket; s=socket.socket(); s.settimeout(0.5); s.connect(('127.0.0.1',5175)); s.close()" 2>/dev/null; then
+            echo "Webview server ready."
+            break
+        fi
+        sleep 0.1
+    done
 fi
 
 if [ -z "${CODEX_CLI_PATH:-}" ]; then

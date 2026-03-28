@@ -25,6 +25,20 @@ The installer:
 7. Starts `codex-update-manager` as a `systemd --user` service for local auto-updates
 
 ## Prerequisites
+```bash
+sudo apt install nodejs npm python3 p7zip-full curl build-essential
+```
+
+Note: Ubuntu/Pop!_OS package `p7zip-full` is often too old to read modern APFS DMGs.
+Install a newer 7-zip (`7zz`) if extraction fails:
+
+```bash
+curl -L -o /tmp/7z.tar.xz https://www.7-zip.org/a/7z2409-linux-x64.tar.xz
+tar -C /tmp -xf /tmp/7z.tar.xz
+sudo install -m 755 /tmp/7zz /usr/local/bin/7zz
+```
+
+### Fedora
 
 You need **Node.js 20+**, **npm**, **Python 3**, **7z**, **curl**, build tools (`gcc`/`g++`/`make`), and **Rust** (`cargo`) for the updater crate and local package rebuilds.
 
@@ -36,7 +50,28 @@ bash scripts/install-deps.sh
 
 That helper detects `apt`, `dnf5`, `dnf`, or `pacman`, installs the system dependencies, and bootstraps Rust through `rustup` if needed.
 
-You also need the Codex CLI:
+### NixOS
+
+A Nix flake is provided that handles dependencies and patches Electron for
+NixOS:
+
+```bash
+nix run github:ilysenko/codex-desktop-linux
+```
+
+This installs the app into `codex-app/` in the current directory. You can also
+enter a dev shell with the required tooling:
+
+```bash
+nix develop github:ilysenko/codex-desktop-linux
+```
+
+To add it to a system flake, include this repo as an input and expose the
+installer package in `environment.systemPackages`, then run
+`codex-desktop-installer` after rebuilding.
+
+
+You also need the **Codex CLI**:
 
 ```bash
 npm i -g @openai/codex
@@ -221,6 +256,7 @@ If launcher behavior changed, inspect:
 ```bash
 sed -n '1,120p' codex-app/start.sh
 ```
+
 
 ## Disclaimer
 
