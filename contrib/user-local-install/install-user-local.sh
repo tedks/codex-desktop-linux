@@ -9,11 +9,15 @@ OPT_BIN_DIR="${OPT_ROOT}/bin"
 OPT_LIB_DIR="${OPT_ROOT}/lib/codex-desktop-linux"
 STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/codex-desktop-linux"
 FROM_UPDATE=0
+ENABLE_TIMER=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --from-update)
             FROM_UPDATE=1
+            ;;
+        --enable-timer)
+            ENABLE_TIMER=1
             ;;
         *)
             echo "Unknown option: $1" >&2
@@ -31,7 +35,8 @@ copy_file() {
 }
 
 install_manager_files() {
-    mkdir -p "$OPT_BIN_DIR" "$OPT_LIB_DIR" "${HOME}/.local/share/applications" "${HOME}/.local/bin" "$STATE_DIR"
+    local systemd_user_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
+    mkdir -p "$OPT_BIN_DIR" "$OPT_LIB_DIR" "${HOME}/.local/share/applications" "${HOME}/.local/bin" "$STATE_DIR" "$systemd_user_dir"
 
     copy_file "${FILES_DIR}/.local/lib/codex-desktop-linux/common.sh" "${OPT_LIB_DIR}/common.sh"
     copy_file "${FILES_DIR}/.local/bin/codex-desktop" "${OPT_BIN_DIR}/codex-desktop"
@@ -62,6 +67,9 @@ EOF
 
     sed "s|@HOME@|${HOME}|g" "${FILES_DIR}/.local/share/applications/codex-desktop.desktop" > "${HOME}/.local/share/applications/codex-desktop.desktop"
 
+    copy_file "${FILES_DIR}/.config/systemd/user/codex-desktop-update.service" "${systemd_user_dir}/codex-desktop-update.service"
+    copy_file "${FILES_DIR}/.config/systemd/user/codex-desktop-update.timer" "${systemd_user_dir}/codex-desktop-update.timer"
+
     cat > "${STATE_DIR}/install.env" <<EOF
 REPO_DIR=$(printf '%q' "$REPO_ROOT")
 OPT_ROOT=$(printf '%q' "$OPT_ROOT")
@@ -83,7 +91,9 @@ install_manager_files
 
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    systemctl --user enable --now codex-desktop-update.timer >/dev/null 2>&1 || true
+    if [ "$ENABLE_TIMER" -eq 1 ]; then
+        systemctl --user enable --now codex-desktop-update.timer >/dev/null 2>&1 || true
+    fi
 fi
 
 if command -v update-desktop-database >/dev/null 2>&1; then

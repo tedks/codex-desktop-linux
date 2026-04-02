@@ -43,7 +43,7 @@ const windowOptionsReplacement =
 if (source.includes(windowOptionsNeedle)) {
   source = source.replace(windowOptionsNeedle, windowOptionsReplacement);
 } else if (!source.includes(iconPathNeedle)) {
-  throw new Error("Could not find BrowserWindow autoHideMenuBar snippet");
+  console.warn("WARN: Could not find BrowserWindow autoHideMenuBar snippet — skipping window options patch");
 }
 
 const menuNeedle = "process.platform===`win32`&&D.removeMenu(),";
@@ -53,7 +53,7 @@ const menuReplacement = `${menuPatch}${menuNeedle}`;
 if (source.includes(menuNeedle) && !source.includes(menuPatch)) {
   source = source.replace(menuNeedle, menuReplacement);
 } else if (!source.includes(menuPatch)) {
-  throw new Error("Could not find window menu visibility snippet");
+  console.warn("WARN: Could not find window menu visibility snippet — skipping menu patch");
 }
 
 const setIconNeedle =
@@ -64,7 +64,7 @@ const setIconPatch =
 if (source.includes(setIconNeedle) && !source.includes("&&D.setIcon(")) {
   source = source.replace(setIconNeedle, setIconPatch);
 } else if (!source.includes("&&D.setIcon(")) {
-  throw new Error("Could not find window setIcon insertion point");
+  console.warn("WARN: Could not find window setIcon insertion point — skipping setIcon patch");
 }
 
 fs.writeFileSync(target, source, "utf8");

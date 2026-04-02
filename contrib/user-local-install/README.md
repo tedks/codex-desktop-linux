@@ -10,7 +10,7 @@ It adds:
 - a desktop entry under `~/.local/share/applications`
 - an icon extracted from the local `Codex.dmg`
 - metadata tracking for the wrapper repo and cached `Codex.dmg`
-- a weekly `systemd --user` timer for unattended update checks and rebuilds
+- an optional weekly `systemd --user` timer for unattended update checks and rebuilds (opt-in)
 
 ## Files
 
@@ -47,15 +47,22 @@ From the repository root:
 ./contrib/user-local-install/install-user-local.sh
 ```
 
+To also enable the weekly auto-update timer, pass `--enable-timer`:
+
+```bash
+./contrib/user-local-install/install-user-local.sh --enable-timer
+```
+
 The installer:
 
 1. copies standalone helper scripts into `~/.local/opt/codex-desktop-linux`
 2. installs thin wrappers into `~/.local/bin`
-3. makes the scripts executable
-4. reloads the user `systemd` daemon if available
-5. enables the weekly timer if the user bus is reachable
-6. refreshes desktop metadata if available
-7. records local metadata and extracts the icon if `Codex.dmg` already exists
+3. copies systemd unit files to `~/.config/systemd/user/`
+4. makes the scripts executable
+5. reloads the user `systemd` daemon if available
+6. enables the weekly timer only if `--enable-timer` was passed
+7. refreshes desktop metadata if available
+8. records local metadata and extracts the icon if `Codex.dmg` already exists
 
 ## Commands
 
@@ -73,4 +80,4 @@ codex-desktop-version
 - The icon is not committed as a binary asset here. It is generated locally from `Codex.dmg`.
 - The helper scripts track both upstream wrapper changes and upstream `Codex.dmg` headers.
 - The helper scripts are copied into `~/.local/opt` and do not run from the git checkout directly.
-- The weekly timer runs `codex-desktop-update --quiet`.
+- The weekly timer runs `codex-desktop-update --quiet`. It is opt-in: pass `--enable-timer` to `install-user-local.sh` to activate it, or run `systemctl --user enable --now codex-desktop-update.timer` manually after install.
