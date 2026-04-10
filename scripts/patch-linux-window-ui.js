@@ -34,6 +34,66 @@ const target = path.join(buildDir, mainBundle);
 let source = fs.readFileSync(target, "utf8");
 const packageJsonPath = path.join(extractedDir, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+function applyLinuxFileManagerPatch(currentSource) {
+  const fileManagerNeedle =
+    "var sa=Mi({id:`fileManager`,label:`Finder`,icon:`apps/finder.png`,kind:`fileManager`,darwin:{detect:()=>`open`,args:e=>ai(e)},win32:{label:`File Explorer`,icon:`apps/file-explorer.png`,detect:ca,args:e=>ai(e),open:async({path:e})=>la(e)}});";
+  const fileManagerLinuxPatch =
+    "var sa=Mi({id:`fileManager`,label:`Finder`,icon:`apps/finder.png`,kind:`fileManager`,darwin:{detect:()=>`open`,args:e=>ai(e)},win32:{label:`File Explorer`,icon:`apps/file-explorer.png`,detect:ca,args:e=>ai(e),open:async({path:e})=>la(e)},linux:{label:`File Manager`,icon:`apps/file-explorer.png`,detect:()=>`linux-file-manager`,args:e=>[e],open:async({path:e})=>{let r=ua(e)??e,i=(0,a.existsSync)(r)&&(0,a.statSync)(r).isFile()?(0,t.dirname)(r):r,o=await n.shell.openPath(i);if(o)throw Error(o)}}});";
+  const fileManagerId = "id:`fileManager`";
+  const fileManagerBlockEnd = "function ca(){";
+  const systemDefaultLinuxNeedle = "id:`systemDefault`";
+
+  const fileManagerStart = currentSource.indexOf(fileManagerId);
+  if (fileManagerStart === -1) {
+    console.error("Failed to apply Linux File Manager Patch");
+    return currentSource;
+  }
+
+  const fileManagerEnd = currentSource.indexOf(fileManagerBlockEnd, fileManagerStart);
+  if (fileManagerEnd === -1) {
+    console.error("Failed to apply Linux File Manager Patch");
+    return currentSource;
+  }
+
+  const fileManagerBlock = currentSource.slice(fileManagerStart, fileManagerEnd);
+  if (fileManagerBlock.includes("linux:{")) {
+    return currentSource;
+  }
+
+  if (!currentSource.includes(fileManagerNeedle)) {
+    console.error("Failed to apply Linux File Manager Patch");
+    return currentSource;
+  }
+
+  const patchedSource = currentSource.replace(fileManagerNeedle, fileManagerLinuxPatch);
+  const patchedFileManagerEnd = patchedSource.indexOf(fileManagerBlockEnd, fileManagerStart);
+  if (patchedFileManagerEnd === -1) {
+    console.error("Failed to apply Linux File Manager Patch");
+    return currentSource;
+  }
+
+  const patchedFileManagerBlock = patchedSource.slice(fileManagerStart, patchedFileManagerEnd);
+  const systemDefaultStart = patchedSource.indexOf(systemDefaultLinuxNeedle);
+  const systemDefaultBlock = systemDefaultStart === -1
+    ? ""
+    : patchedSource.slice(
+        systemDefaultStart,
+        patchedSource.indexOf("async function Wa", systemDefaultStart),
+      );
+
+  if (
+    !patchedFileManagerBlock.includes("linux:{label:`File Manager`") ||
+    !patchedFileManagerBlock.includes("detect:()=>`linux-file-manager`") ||
+    !patchedFileManagerBlock.includes("n.shell.openPath(i)") ||
+    !systemDefaultBlock.includes("linux:{detect:()=>`system-default`")
+  ) {
+    console.error("Failed to apply Linux File Manager Patch");
+    return currentSource;
+  }
+
+  return patchedSource;
+}
+
 
 const windowOptionsNeedle =
   "...process.platform===`win32`?{autoHideMenuBar:!0}:{},";
@@ -106,6 +166,8 @@ if (colorMatch) {
   console.warn("WARN: Could not find color constants (#00000000, #000000, #f9f9f9) — skipping background patch");
 }
 
+source = applyLinuxFileManagerPatch(source);
+
 fs.writeFileSync(target, source, "utf8");
 
 if (packageJson.desktopName !== "codex-desktop.desktop") {
@@ -113,7 +175,7 @@ if (packageJson.desktopName !== "codex-desktop.desktop") {
   fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
-console.log("Patched Linux window icon and menu behavior:", {
+console.log("Patched Linux window and shell behavior:", {
   target,
   mainBundle,
   iconAsset,
