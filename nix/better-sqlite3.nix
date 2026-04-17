@@ -26,16 +26,19 @@ stdenv.mkDerivation rec {
   # No configure step — node-gyp handles everything.
   dontConfigure = true;
 
-  # Build against Electron's Node headers (ABI 143) rather than
-  # standalone Node (ABI 137).  better-sqlite3 bundles its own SQLite
-  # source in deps/, so no external SQLite dependency is needed.
+  # Build against Electron's Node headers rather than standalone
+  # Node.js.  better-sqlite3 bundles its own SQLite source in deps/,
+  # so no external SQLite dependency is needed.
+  #
+  # IMPORTANT: We bypass the nixpkgs node-gyp wrapper because it
+  # hardcodes npm_config_nodedir to the system Node.js path, and
+  # env vars override CLI --nodedir flags in node-gyp's arg parser.
+  # Calling node-gyp.js directly via node avoids this.
   buildPhase = ''
     runHook preBuild
     export HOME=$TMPDIR
-    # npm_config_nodedir forces node-gyp to use Electron headers
-    # instead of the system Node.js headers.
     export npm_config_nodedir=${electronHeaders}
-    node-gyp rebuild --release
+    node ${node-gyp}/lib/node_modules/node-gyp/bin/node-gyp.js rebuild --release
     runHook postBuild
   '';
 

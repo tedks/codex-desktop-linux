@@ -31,16 +31,18 @@ buildNpmPackage rec {
     sed -i '/"fsevents"/d' package-lock.json
   '';
 
-  # Build against Electron's Node headers (ABI 143) rather than
-  # standalone Node (ABI 137).  Without this the .node file won't
-  # load inside Electron.
+  # Build against Electron's Node headers rather than standalone
+  # Node.js.  Without this the .node file won't load inside Electron.
+  #
+  # IMPORTANT: We bypass the nixpkgs node-gyp wrapper because it
+  # hardcodes npm_config_nodedir to the system Node.js path, and
+  # env vars override CLI --nodedir flags in node-gyp's arg parser.
+  # Calling node-gyp.js directly via node avoids this.
   buildPhase = ''
     runHook preBuild
     npm run build
-    # npm_config_nodedir forces node-gyp to use Electron headers
-    # instead of the system Node.js headers.
     export npm_config_nodedir=${electronHeaders}
-    node-gyp rebuild
+    node ${node-gyp}/lib/node_modules/node-gyp/bin/node-gyp.js rebuild
     runHook postBuild
   '';
 
