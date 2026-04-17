@@ -70,10 +70,10 @@ buildFHSEnv {
     xorg.libXfixes
     xorg.libXrandr
     xorg.libxcb
-    xorg.libxcursor
-    xorg.libxi
-    xorg.libxtst
-    xorg.libxscrnsaver
+    xorg.libXcursor
+    xorg.libXi
+    xorg.libXtst
+    xorg.libXScrnSaver
 
     # Wayland
     wayland

@@ -1,11 +1,12 @@
 {
   lib,
-  buildNpmPackage,
+  stdenv,
   fetchFromGitHub,
   python3,
+  nodejs,
   node-gyp,
 }:
-buildNpmPackage rec {
+stdenv.mkDerivation rec {
   pname = "better-sqlite3";
   version = "12.8.0";
 
@@ -16,18 +17,17 @@ buildNpmPackage rec {
     hash = "sha256-B9SHvlSK9Heqhp3maCPRf08tatXzLi5m2zcnU5o2Y0E=";
   };
 
-  npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  nativeBuildInputs = [ python3 nodejs node-gyp ];
 
-  nativeBuildInputs = [ python3 node-gyp ];
+  # No configure step — node-gyp handles everything.
+  dontConfigure = true;
 
-  # The install script tries prebuild-install (download prebuilt binary)
-  # then falls back to node-gyp.  In Nix we skip the download attempt
-  # and build from source directly.  The SQLite source is bundled in deps/.
-  dontNpmInstall = true;
-
+  # better-sqlite3 bundles its own SQLite source in deps/, so no
+  # external SQLite dependency is needed.  Just run node-gyp directly.
   buildPhase = ''
     runHook preBuild
-    node-gyp rebuild --release
+    export HOME=$TMPDIR
+    node-gyp rebuild --release --nodedir=${nodejs}/include/node
     runHook postBuild
   '';
 

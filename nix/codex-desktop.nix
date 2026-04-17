@@ -4,6 +4,7 @@
   fetchurl,
   electron,
   p7zip,
+  asar,
   nodejs,
   makeDesktopItem,
   python3,
@@ -50,7 +51,7 @@ stdenvNoCC.mkDerivation {
   src = codex-dmg;
 
   nativeBuildInputs = [
-    p7zip nodejs bash python3
+    p7zip nodejs bash python3 asar
   ];
 
   dontUnpack = true;
@@ -82,7 +83,7 @@ stdenvNoCC.mkDerivation {
 
     # --- Extract asar ---
     echo "Extracting app.asar..."
-    npx --yes asar extract "$resources_dir/app.asar" app-extracted
+    asar extract "$resources_dir/app.asar" app-extracted
 
     # Merge unpacked native modules into extracted tree
     if [ -d "$resources_dir/app.asar.unpacked" ]; then
@@ -129,7 +130,7 @@ stdenvNoCC.mkDerivation {
 
     # --- Repack asar ---
     echo "Repacking app.asar..."
-    npx asar pack app-extracted app.asar --unpack "{*.node,*.so,*.dylib}"
+    asar pack app-extracted app.asar --unpack "{*.node,*.so,*.dylib}"
 
     echo "Build phase complete"
     runHook postBuild
