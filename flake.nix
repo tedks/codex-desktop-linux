@@ -1,151 +1,51 @@
 {
-  description = "Codex Desktop for Linux installer";
+  description = "Codex Desktop for Linux";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs { inherit system; };
-        sourceRoot = pkgs.lib.cleanSourceWith {
-          src = ./.;
-          filter = path: type:
-            pkgs.lib.cleanSourceFilter path type
-            && (let
-              pathStr = toString path;
-            in
-              !(pkgs.lib.hasSuffix "/.codex" pathStr || pkgs.lib.hasInfix "/.codex/" pathStr));
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [ "x86_64-linux" ];
+
+      perSystem = { pkgs, system, ... }: let
+        node-pty = pkgs.callPackage ./nix/node-pty.nix { };
+        better-sqlite3 = pkgs.callPackage ./nix/better-sqlite3.nix { };
+        codex-desktop = pkgs.callPackage ./nix/codex-desktop.nix {
+          inherit node-pty better-sqlite3;
+        };
+        codex-desktop-fhs = pkgs.callPackage ./nix/fhs.nix {
+          inherit codex-desktop;
+        };
+      in {
+        _module.args.pkgs = import inputs.nixpkgs {
+          inherit system;
+          config.allowUnfreePredicate = pkg:
+            builtins.elem (inputs.nixpkgs.lib.getName pkg) [
+              "codex-desktop"
+            ];
         };
 
-        codexDmg = pkgs.fetchurl {
-          url = "https://persistent.oaistatic.com/codex-app-prod/Codex.dmg";
-          hash = "sha256-T8rTXalt/FvnKvbHNovItKryOQdoCy9d3Rs2crD0L0U=";
-        };
-
-        electronLibs = with pkgs; [
-          glib
-          gtk3
-          pango
-          cairo
-          gdk-pixbuf
-          atk
-          at-spi2-atk
-          at-spi2-core
-          nss
-          nspr
-          dbus
-          cups
-          expat
-          libdrm
-          mesa
-          libgbm
-          alsa-lib
-          libX11
-          libXcomposite
-          libXdamage
-          libXext
-          libXfixes
-          libXrandr
-          libxcb
-          libxkbcommon
-          libxcursor
-          libxi
-          libxtst
-          libxscrnsaver
-          libglvnd
-          systemd
-          wayland
-        ];
-
-        electronLibPath = pkgs.lib.makeLibraryPath electronLibs;
-
-        installer = pkgs.writeShellApplication {
-          name = "codex-desktop-installer";
-          runtimeInputs = [
-            pkgs.bash
-            pkgs.nodejs
-            pkgs.python3
-            pkgs.p7zip
-            pkgs.curl
-            pkgs.unzip
-            pkgs.gnumake
-            pkgs.gcc
-            pkgs.patchelf
-          ];
-          text = ''
-            set -euo pipefail
-
-            root_dir="$(pwd)"
-            workdir="$(mktemp -d)"
-            source_dir="$workdir/source"
-            cleanup() {
-              rm -rf "$workdir"
-            }
-            trap cleanup EXIT
-
-            mkdir -p "$source_dir"
-            cp -R ${sourceRoot}/. "$source_dir"
-            chmod -R u+w "$source_dir"
-            cp ${codexDmg} "$source_dir/Codex.dmg"
-            chmod +x "$source_dir/install.sh"
-
-            cd "$source_dir"
-            export CODEX_INSTALL_DIR="''${CODEX_INSTALL_DIR:-$root_dir/codex-app}"
-            ${pkgs.bash}/bin/bash "$source_dir/install.sh" "$source_dir/Codex.dmg" "$@"
-
-            install_dir="''${CODEX_INSTALL_DIR:-$root_dir/codex-app}"
-
-            # Patch the Electron binary for NixOS.
-            if [ -f "$install_dir/electron" ]; then
-              echo "[NIX] Patching Electron binary for NixOS..."
-              patchelf --set-interpreter "$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)" \
-                       --set-rpath "$install_dir:${electronLibPath}" \
-                       "$install_dir/electron"
-
-              if [ -f "$install_dir/chrome_crashpad_handler" ]; then
-                patchelf --set-interpreter "$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)" \
-                         "$install_dir/chrome_crashpad_handler" || true
-              fi
-
-              if [ -f "$install_dir/chrome-sandbox" ]; then
-                patchelf --set-interpreter "$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)" \
-                         "$install_dir/chrome-sandbox" || true
-              fi
-
-              find "$install_dir" -maxdepth 1 -name "*.so*" -type f | while read -r so; do
-                patchelf --set-rpath "${electronLibPath}" "$so" 2>/dev/null || true
-              done
-
-              echo "[NIX] Electron patched successfully"
-            fi
-          '';
-        };
-      in
-      {
         packages = {
-          default = installer;
-          installer = installer;
+          inherit node-pty better-sqlite3 codex-desktop codex-desktop-fhs;
+          default = codex-desktop-fhs;
         };
+      };
 
-        apps.default = {
-          type = "app";
-          program = "${installer}/bin/codex-desktop-installer";
+      flake = {
+        overlays.default = final: prev: let
+          node-pty = final.callPackage ./nix/node-pty.nix { };
+          better-sqlite3 = final.callPackage ./nix/better-sqlite3.nix { };
+        in {
+          codex-desktop = final.callPackage ./nix/codex-desktop.nix {
+            inherit node-pty better-sqlite3;
+          };
+          codex-desktop-fhs = final.callPackage ./nix/fhs.nix {
+            codex-desktop = final.codex-desktop;
+          };
         };
-
-        devShells.default = pkgs.mkShell {
-          packages = [
-            pkgs.nodejs
-            pkgs.python3
-            pkgs.p7zip
-            pkgs.curl
-            pkgs.unzip
-            pkgs.gnumake
-            pkgs.gcc
-          ];
-        };
-      }
-    );
+      };
+    };
 }
