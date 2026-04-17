@@ -28,6 +28,12 @@
   at-spi2-atk,
   at-spi2-core,
 
+  # Fonts
+  fontconfig,
+  freetype,
+  dejavu_fonts,
+  liberation_ttf,
+
   # Audio
   alsa-lib,
   pipewire,
@@ -89,6 +95,12 @@ buildFHSEnv {
     glib
     at-spi2-atk
     at-spi2-core
+
+    # Fonts
+    fontconfig
+    freetype
+    dejavu_fonts
+    liberation_ttf
 
     # Audio
     alsa-lib
