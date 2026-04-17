@@ -42,6 +42,7 @@
   systemd,
   libgbm,
   psmisc,  # fuser (kill stale webview server by port)
+  openssh,  # ssh (remote connections discovery)
 
   # Network
   curl,
@@ -103,6 +104,7 @@ buildFHSEnv {
     systemd
     libgbm
     psmisc
+    openssh
 
     # Network
     curl
