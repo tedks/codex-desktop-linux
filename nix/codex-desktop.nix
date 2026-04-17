@@ -18,7 +18,7 @@ let
 
   codex-dmg = fetchurl {
     url = "https://persistent.oaistatic.com/codex-app-prod/Codex.dmg";
-    hash = "sha256-T8rTXalt/FvnKvbHNovItKryOQdoCy9d3Rs2crD0L0U=";
+    hash = "sha256-EiF/f8fnpA3P93/VswqtOK6cu6sftJyoyrOsr+DRPrw=";
   };
 
   sourceRoot = lib.cleanSourceWith {
@@ -346,7 +346,11 @@ clear_stale_pid_file() {
 }
 
 clear_stale_pid_file
-pkill -f "http.server 5175" 2>/dev/null || true
+
+# Kill any stale webview server.  Use fuser (port-based) rather than
+# pkill (process-name-based) because inside the FHS bubblewrap
+# namespace pkill can't see processes started outside the namespace.
+fuser -k 5175/tcp 2>/dev/null || true
 sleep 0.5
 
 if [ -d "$WEBVIEW_DIR" ] && [ "$(ls -A "$WEBVIEW_DIR" 2>/dev/null)" ]; then
@@ -387,6 +391,10 @@ if [ -z "$CODEX_CLI_PATH" ]; then
 fi
 
 echo "Using CODEX_CLI_PATH=$CODEX_CLI_PATH"
+
+# Tell Electron the app is packaged so it uses process.resourcesPath
+# (computed from /proc/self/exe) for resource resolution.
+export ELECTRON_FORCE_IS_PACKAGED=true
 
 echo "$$" > "$APP_PID_FILE"
 exec "$ELECTRON_WRAPPER" \

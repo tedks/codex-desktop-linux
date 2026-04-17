@@ -4,7 +4,11 @@
   fetchFromGitHub,
   python3,
   node-gyp,
+  electron,
 }:
+let
+  electronHeaders = electron.passthru.headers;
+in
 buildNpmPackage rec {
   pname = "node-pty";
   version = "1.1.0";
@@ -27,11 +31,15 @@ buildNpmPackage rec {
     sed -i '/"fsevents"/d' package-lock.json
   '';
 
-  # Default npmBuildHook only runs "npm run build" (tsc), but we also
-  # need the native addon.  Run both explicitly.
+  # Build against Electron's Node headers (ABI 143) rather than
+  # standalone Node (ABI 137).  Without this the .node file won't
+  # load inside Electron.
   buildPhase = ''
     runHook preBuild
     npm run build
+    # npm_config_nodedir forces node-gyp to use Electron headers
+    # instead of the system Node.js headers.
+    export npm_config_nodedir=${electronHeaders}
     node-gyp rebuild
     runHook postBuild
   '';

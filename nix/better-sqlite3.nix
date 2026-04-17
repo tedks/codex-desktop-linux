@@ -5,7 +5,11 @@
   python3,
   nodejs,
   node-gyp,
+  electron,
 }:
+let
+  electronHeaders = electron.passthru.headers;
+in
 stdenv.mkDerivation rec {
   pname = "better-sqlite3";
   version = "12.8.0";
@@ -22,12 +26,16 @@ stdenv.mkDerivation rec {
   # No configure step — node-gyp handles everything.
   dontConfigure = true;
 
-  # better-sqlite3 bundles its own SQLite source in deps/, so no
-  # external SQLite dependency is needed.  Just run node-gyp directly.
+  # Build against Electron's Node headers (ABI 143) rather than
+  # standalone Node (ABI 137).  better-sqlite3 bundles its own SQLite
+  # source in deps/, so no external SQLite dependency is needed.
   buildPhase = ''
     runHook preBuild
     export HOME=$TMPDIR
-    node-gyp rebuild --release --nodedir=${nodejs}/include/node
+    # npm_config_nodedir forces node-gyp to use Electron headers
+    # instead of the system Node.js headers.
+    export npm_config_nodedir=${electronHeaders}
+    node-gyp rebuild --release
     runHook postBuild
   '';
 

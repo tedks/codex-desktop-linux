@@ -41,6 +41,7 @@
   expat,
   systemd,
   libgbm,
+  psmisc,  # fuser (kill stale webview server by port)
 
   # Network
   curl,
@@ -101,6 +102,7 @@ buildFHSEnv {
     expat
     systemd
     libgbm
+    psmisc
 
     # Network
     curl
