@@ -3,7 +3,7 @@
   stdenvNoCC,
   fetchurl,
   electron,
-  p7zip,
+  _7zz,
   asar,
   nodejs,
   makeDesktopItem,
@@ -14,7 +14,7 @@
 }:
 let
   pname = "codex-desktop";
-  version = "26.415.21839";
+  version = "26.519.81530";
 
   # NOTE: this URL serves the *latest* Codex.dmg (no version in the path), so
   # this hash must be re-pinned whenever OpenAI republishes the desktop app.
@@ -54,7 +54,7 @@ stdenvNoCC.mkDerivation {
   src = codex-dmg;
 
   nativeBuildInputs = [
-    p7zip nodejs bash python3 asar
+    _7zz nodejs bash python3 asar
   ];
 
   dontUnpack = true;
@@ -64,9 +64,12 @@ stdenvNoCC.mkDerivation {
     export HOME=$TMPDIR
 
     # --- Extract DMG ---
+    # Use modern 7-Zip (_7zz): the Codex DMG is an APFS image, which the old
+    # p7zip 17.05 cannot read inside (it only sees the raw Apple_APFS stream),
+    # so the .app tree never appears. 7-Zip 21+ reads APFS directly.
     echo "Extracting Codex DMG..."
     mkdir -p dmg-extract
-    7z x -y -snl "$src" -odmg-extract || true
+    7zz x -y -snl "$src" -odmg-extract || true
 
     # Find the .app bundle
     app_dir=$(find dmg-extract -maxdepth 3 -name "*.app" -type d | head -1)
