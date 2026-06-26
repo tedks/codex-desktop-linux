@@ -117,6 +117,13 @@ stdenvNoCC.mkDerivation {
     cp -r ${better-sqlite3}/lib/node_modules/better-sqlite3/lib app-extracted/node_modules/better-sqlite3/
     cp -r ${better-sqlite3}/lib/node_modules/better-sqlite3/build app-extracted/node_modules/better-sqlite3/
 
+    # --- Apply Linux UI patches ---
+    # Must run before extracting webview content so that patchAssetFiles()
+    # edits land in app-extracted/webview/assets/ *before* those files are
+    # copied to webview-content/ (which is what the HTTP server actually serves).
+    echo "Applying Linux UI patches..."
+    node ${sourceRoot}/scripts/patch-linux-window-ui.js app-extracted
+
     # --- Extract webview content ---
     echo "Extracting webview content..."
     mkdir -p webview-content
@@ -129,10 +136,6 @@ stdenvNoCC.mkDerivation {
     else
       echo "WARNING: webview directory not found in asar"
     fi
-
-    # --- Apply Linux UI patches ---
-    echo "Applying Linux UI patches..."
-    node ${sourceRoot}/scripts/patch-linux-window-ui.js app-extracted
 
     # --- Repack asar ---
     echo "Repacking app.asar..."
