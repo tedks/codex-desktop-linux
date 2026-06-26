@@ -63,16 +63,22 @@ function patchAssetFiles(filenamePattern, patchFn, missingWarnMessage) {
 }
 
 function applyLinuxOpaqueWindowsDefaultPatch(currentSource) {
-  const mergeNeedle = "opaqueWindows:e?.opaqueWindows??n.opaqueWindows,semanticColors:";
-  const mergePatch =
-    "opaqueWindows:e?.opaqueWindows??(typeof navigator<`u`&&((navigator.userAgentData?.platform??navigator.platform??navigator.userAgent).toLowerCase().includes(`linux`))?!0:n.opaqueWindows),semanticColors:";
-
-  if (currentSource.includes("opaqueWindows:e?.opaqueWindows??(typeof navigator<`u`&&")) {
+  // Already patched: any variable, any form — look for the navigator check near opaqueWindows
+  if (/opaqueWindows:[^?]+\?\.opaqueWindows\?\?\(typeof navigator/.test(currentSource)) {
     return currentSource;
   }
 
-  if (currentSource.includes(mergeNeedle)) {
-    return currentSource.replace(mergeNeedle, mergePatch);
+  // Match the merge pattern regardless of minified variable names:
+  //   opaqueWindows:X?.opaqueWindows??Y.opaqueWindows,semanticColors
+  // where X and Y are any valid JS identifier (minification artifacts).
+  const mergeRegex = /opaqueWindows:([\w$]+)\?\.opaqueWindows\?\?([\w$]+)\.opaqueWindows,semanticColors/;
+  const match = mergeRegex.exec(currentSource);
+
+  if (match) {
+    const [full, userVar, defaultVar] = match;
+    const linuxDefault = `(typeof navigator<\`u\`&&((navigator.userAgentData?.platform??navigator.platform??navigator.userAgent).toLowerCase().includes(\`linux\`))?!0:${defaultVar}.opaqueWindows)`;
+    const patch = `opaqueWindows:${userVar}?.opaqueWindows??${linuxDefault},semanticColors`;
+    return currentSource.replace(full, patch);
   }
 
   if (currentSource.includes("opaqueWindows") && currentSource.includes("semanticColors")) {
@@ -216,10 +222,13 @@ source = applyLinuxFileManagerPatch(source);
 
 fs.writeFileSync(target, source, "utf8");
 
+// Patch the theme bundle that contains the opaqueWindows merge (user setting ?? theme default).
+// Historically named code-theme-*.js; renamed to chrome-theme-*.js in Codex v26+.
+// We match both patterns to stay compatible across versions.
 patchAssetFiles(
-  /^code-theme-.*\.js$/,
+  /^(?:code|chrome)-theme-.*\.js$/,
   applyLinuxOpaqueWindowsDefaultPatch,
-  `WARN: Could not find code theme bundle in ${webviewAssetsDir} — skipping translucent sidebar default patch`,
+  `WARN: Could not find code/chrome theme bundle in ${webviewAssetsDir} — skipping translucent sidebar default patch`,
 );
 patchAssetFiles(
   /^use-resolved-theme-variant-.*\.js$/,
