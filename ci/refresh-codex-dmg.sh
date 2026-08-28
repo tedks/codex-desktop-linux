@@ -90,20 +90,81 @@ log "Fetched hash:   $new_hash"
 log "Store path:     $store_path"
 
 # --- Extract the version from the DMG ------------------------------------
-# The Codex DMG is an APFS image; the old p7zip cannot read inside it, so we
-# use modern 7-Zip (_7zz). Extract only the Info.plist into a scratch dir.
+# The DMG is a disk image; the old p7zip cannot read inside it, so we use
+# modern 7-Zip (_7zz).
+#
+# Do NOT hardcode the bundle path. This step used to extract exactly
+# "Codex.app/Contents/Info.plist" and broke on 2026-08-26 when OpenAI
+# restructured the image: the app is now shipped as ChatGPT.app nested inside a
+# volume directory, i.e.
+#
+#     ChatGPT Installer/ChatGPT.app/Contents/Info.plist
+#
+# so a top-level Codex.app never matched and every run failed with
+# "Info.plist not found". Two things changed at once -- the bundle NAME and its
+# DEPTH -- so we now discover the plist instead of assuming where it lives.
+#
+# Note the on-disk path after extraction is not the same as the listed path:
+# 7-Zip materialises the volume by its display name ("ChatGPT Installer"),
+# while the archive listing shows it as "Installer". Hence extract-then-find
+# rather than predicting the path.
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
 log "Extracting Info.plist with 7-Zip ..."
-( cd "$work_dir" && nix run nixpkgs#_7zz -- x -y "$store_path" "Codex.app/Contents/Info.plist" >/dev/null )
+# Pull only plists, not the whole 1.5 GiB image. 7-Zip exits non-zero on the
+# image's unsupported symlinks/extended attrs even when the files we asked for
+# came out fine, so tolerate the status and judge by what actually landed.
+( cd "$work_dir" && nix run nixpkgs#_7zz -- x -y -r "$store_path" "*Contents/Info.plist" >/dev/null 2>&1 ) || true
 
-plist="$work_dir/Codex.app/Contents/Info.plist"
-if [[ ! -f "$plist" ]]; then
-  echo "error: Info.plist not found in DMG after extraction" >&2
-  echo "       (extraction layout may have changed; manual inspection needed)" >&2
+# Picking the right plist is the whole problem. Measured on the 2026-08-27
+# image: 41 Info.plist files ship inside it, and 14 of them are legitimately
+# <X>.app/Contents/Info.plist -- Sparkle's Updater.app, four "Codex Framework"
+# helper apps (Renderer/GPU/Alerts/Service), and several nested
+# "Codex Computer Use.app" bundles. Any of them would yield a plausible but
+# WRONG version, silently.
+#
+# So two rules, and both are load-bearing:
+#   1. the ".app" must be the DIRECT grandparent -- <X>.app/Contents/Info.plist.
+#      This drops the .docktileplugin plug-in and Sparkle's
+#      .../Versions/B/Resources/Info.plist.
+#   2. of what survives, take the SHALLOWEST. The outer application bundle is by
+#      construction closer to the volume root than anything it embeds. With 14
+#      survivors this is doing real filtering, not breaking a tie.
+#
+# If rule 2 ever finds a tie at minimum depth the image has two top-level apps
+# and we must not guess -- fail loudly instead of silently versioning off the
+# wrong one.
+mapfile -t plist_candidates < <(
+  find "$work_dir" -type f -name Info.plist 2>/dev/null \
+    | awk -F/ 'NF>=3 && $(NF-2) ~ /\.app$/ && $(NF-1)=="Contents" { print NF"\t"$0 }' \
+    | sort -n
+)
+
+if [[ ${#plist_candidates[@]} -eq 0 ]]; then
+  echo "error: no <bundle>.app/Contents/Info.plist found in DMG after extraction" >&2
+  echo "       (image layout changed again; inspect with:" >&2
+  echo "          nix run nixpkgs#_7zz -- l -ba '$store_path' | head -40 )" >&2
+  echo "       plists that WERE extracted, for reference:" >&2
+  find "$work_dir" -type f -name Info.plist 2>/dev/null | sed 's|^|         |' >&2
   exit 1
 fi
+
+min_depth="${plist_candidates[0]%%$'\t'*}"
+shallowest=()
+for entry in "${plist_candidates[@]}"; do
+  [[ "${entry%%$'\t'*}" == "$min_depth" ]] && shallowest+=( "${entry#*$'\t'}" )
+done
+
+if [[ ${#shallowest[@]} -ne 1 ]]; then
+  echo "error: ambiguous application bundle -- ${#shallowest[@]} candidates at the same depth:" >&2
+  printf '         %s\n' "${shallowest[@]#$work_dir/}" >&2
+  echo "       refusing to guess which one carries the product version" >&2
+  exit 1
+fi
+
+plist="${shallowest[0]}"
+log "Using bundle plist: ${plist#$work_dir/} (${#plist_candidates[@]} .app plists in image)"
 
 # XML plist: find <key>CFBundleShortVersionString</key> then the following
 # <string>...</string>. grep -A1 gives us the key line plus the next line.
