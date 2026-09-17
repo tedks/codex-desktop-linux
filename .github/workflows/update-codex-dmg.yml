@@ -1,9 +1,9 @@
-name: Update Codex.dmg pin
+name: Update Codex Linux package pin
 
-# OpenAI serves the latest Codex.dmg from a version-less URL, so the sha256
+# OpenAI serves the latest Linux .deb from a version-less URL, so the sha256
 # pinned in nix/codex-desktop.nix goes stale whenever they republish. This
-# workflow refetches the DMG daily, re-pins the hash + version when it changes,
-# validates the new DMG still builds with the existing extraction logic, and
+# workflow refetches the package daily, re-pins the hash + version when it changes,
+# validates the new package still builds with the existing wrapper, and
 # opens a PR with the details.
 
 on:
@@ -17,7 +17,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: update-codex-dmg
+  group: update-codex-linux-package
   cancel-in-progress: false
 
 jobs:
@@ -37,19 +37,19 @@ jobs:
         id: refresh
         run: ./ci/refresh-codex-dmg.sh
 
-      - name: Validate build with new DMG
+      - name: Validate build with new Linux package
         id: build
         # Only attempt a build if something actually changed.
         if: steps.refresh.outputs.changed == 'true'
         run: |
           set -o pipefail
-          echo "Building .#codex-desktop to validate the new DMG..."
+          echo "Building .#codex-desktop to validate the new Linux package..."
           if nix build --no-link --print-build-logs .#codex-desktop 2>&1 | tee build.log; then
             echo "result=success" >> "$GITHUB_OUTPUT"
             echo "Build succeeded."
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
-            echo "Build FAILED — extraction logic likely needs manual attention."
+            echo "Build FAILED — package layout likely needs manual attention."
           fi
 
       - name: Compose PR body
@@ -63,21 +63,21 @@ jobs:
           BUILD_RESULT: ${{ steps.build.outputs.result }}
         run: |
           # Design choice: we always open the PR, even when the validation
-          # build fails. A failed build almost always means the DMG's internal
-          # layout changed (so the asar/APFS extraction in nix/codex-desktop.nix
+          # build fails. A failed build usually means the Debian package's
+          # layout changed (so the wrapper in nix/codex-desktop.nix
           # needs manual updating), not just that the hash drifted — and that is
           # exactly the case a human most needs to see. We mark it loudly so a
           # red build is never silently merged.
           if [ "$BUILD_RESULT" = "success" ]; then
-            build_line="✅ \`nix build --no-link .#codex-desktop\` **succeeded** with the new DMG."
+            build_line="✅ \`nix build --no-link .#codex-desktop\` **succeeded** with the new Linux package."
           else
-            build_line="❌ \`nix build --no-link .#codex-desktop\` **FAILED** with the new DMG. **Do not merge as-is** — the DMG's internal layout has probably changed and the extraction logic in \`nix/codex-desktop.nix\` needs manual updating. See the workflow logs (\"Validate build with new DMG\" step) for details."
+            build_line="❌ \`nix build --no-link .#codex-desktop\` **FAILED** with the new Linux package. **Do not merge as-is** — the Debian package layout or wrapper likely needs manual updating. See the workflow logs for details."
           fi
 
           {
-            echo "## Automated Codex.dmg re-pin"
+            echo "## Automated Codex Linux package re-pin"
             echo
-            echo "OpenAI republished \`Codex.dmg\` at the version-less URL, so the"
+            echo "OpenAI republished the Linux \`.deb\` at the version-less URL, so the"
             echo "pinned hash in \`nix/codex-desktop.nix\` was stale. This PR updates it."
             echo
             echo "| field | old | new |"
@@ -99,17 +99,17 @@ jobs:
         if: steps.refresh.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: ci/codex-dmg-auto-update
+          branch: ci/codex-linux-package-auto-update
           base: main
           commit-message: |
-            codex-desktop: re-pin Codex.dmg (${{ steps.refresh.outputs.old_version }} -> ${{ steps.refresh.outputs.new_version }})
+            codex-desktop: re-pin Linux package (${{ steps.refresh.outputs.old_version }} -> ${{ steps.refresh.outputs.new_version }})
 
-            Automated re-pin of the version-less Codex.dmg URL.
+            Automated re-pin of the version-less official Linux package URL.
             hash ${{ steps.refresh.outputs.old_hash }} -> ${{ steps.refresh.outputs.new_hash }}
             nix build result: ${{ steps.build.outputs.result }}
 
             Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-          title: "codex-desktop: re-pin Codex.dmg (${{ steps.refresh.outputs.new_version }})"
+          title: "codex-desktop: re-pin Linux package (${{ steps.refresh.outputs.new_version }})"
           body-path: pr-body.md
           labels: |
             automated
