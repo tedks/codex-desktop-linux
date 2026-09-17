@@ -325,22 +325,7 @@ wait_for_webview_server() {
 
 verify_webview_origin() {
     local url="$1"
-    python3 - "$url" <<'PY'
-import sys
-import urllib.request
-
-url = sys.argv[1]
-required_markers = ("<title>Codex</title>", "startup-loader")
-
-with urllib.request.urlopen(url, timeout=2) as response:
-    body = response.read(8192).decode("utf-8", "ignore")
-
-missing = [marker for marker in required_markers if marker not in body]
-if missing:
-    raise SystemExit(
-        f"Webview origin validation failed for {url}; missing markers: {', '.join(missing)}"
-    )
-PY
+    python3 ${./verify-webview-origin.py} "$url"
 }
 
 clear_stale_pid_file() {
