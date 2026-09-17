@@ -14,14 +14,14 @@
 }:
 let
   pname = "codex-desktop";
-  version = "26.908.70816";
+  version = "26.911.61220";
 
   # NOTE: this URL serves the *latest* Codex.dmg (no version in the path), so
   # this hash must be re-pinned whenever OpenAI republishes the desktop app.
   # Refresh with: nix store prefetch-file --name Codex.dmg <url>
   codex-dmg = fetchurl {
     url = "https://persistent.oaistatic.com/codex-app-prod/Codex.dmg";
-    hash = "sha256-Ld/FhjgUpoULH86VLcyS2SLOU6VKmkRdn9x1Xkm4KqA=";
+    hash = "sha256-YcM7ZntFYOcMlNDAJ14PQI2K4cKxy/WYQ00TB69HFRY=";
   };
 
   sourceRoot = lib.cleanSourceWith {
