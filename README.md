@@ -113,15 +113,20 @@ You also need the **Rust toolchain** for the updater crate:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### NixOS
+### NixOS and Home Manager
 
-A Nix flake is provided that handles dependencies and patches Electron for NixOS:
+The Nix flake repackages OpenAI's official Linux `.deb` without modifying its
+Owl runtime:
 
 ```bash
 nix run github:ilysenko/codex-desktop-linux
 ```
 
-This installs the app into `codex-app/` in the current directory. You can also enter a dev shell with the required tooling:
+The default package launches the official Linux application in an FHS
+environment suitable for NixOS. The raw `.#codex-desktop` package is available
+for supported FHS distributions such as Ubuntu. The legacy DMG-to-Electron
+build remains available elsewhere in this repository for historical
+native-package workflows, but it is not used by either Nix package.
 
 ```bash
 nix develop github:ilysenko/codex-desktop-linux

@@ -16,6 +16,13 @@ The current working flow is:
 
 ## Source Of Truth
 
+- `nix/codex-desktop.nix`
+  Nix wrapper around OpenAI's official Linux `.deb`. Do not replace its Owl
+  runtime with stock Electron; current releases reject that configuration.
+- `ci/refresh-codex-dmg.sh`
+  Refreshes the Nix pin from the official Linux package. The historical script
+  name is retained for compatibility with external automation.
+
 - `install.sh`
   Main installer and launcher generator.
 - `scripts/build-deb.sh`

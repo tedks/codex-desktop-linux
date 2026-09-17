@@ -49,6 +49,11 @@
   libgbm,
   psmisc,  # fuser (kill stale webview server by port)
   openssh,  # ssh (remote connections discovery)
+  libnotify,
+  xdg-utils,
+  tpm2-tss,
+  libusb1,
+  xz,
 
   # Network
   curl,
@@ -117,6 +122,11 @@ buildFHSEnv {
     libgbm
     psmisc
     openssh
+    libnotify
+    xdg-utils
+    tpm2-tss
+    libusb1
+    xz
 
     # Network
     curl
@@ -126,12 +136,18 @@ buildFHSEnv {
   runScript = "${codex-desktop}/bin/codex-desktop";
 
   extraInstallCommands = ''
-    # Copy desktop file and icons from inner derivation
-    mkdir -p $out/share/applications
-    cp ${codex-desktop}/share/applications/* $out/share/applications/
+    # Copy desktop integration from the inner derivation when present.
+    for share_dir in applications icons pixmaps metainfo; do
+      if [ -d "${codex-desktop}/share/$share_dir" ]; then
+        mkdir -p "$out/share/$share_dir"
+        cp -r "${codex-desktop}/share/$share_dir/." "$out/share/$share_dir/"
+      fi
+    done
 
-    mkdir -p $out/share/icons
-    cp -r ${codex-desktop}/share/icons/* $out/share/icons/
+    substituteInPlace "$out/share/applications/chatgpt.desktop" \
+      --replace-fail \
+        "Exec=${codex-desktop}/bin/chatgpt %U" \
+        "Exec=$out/bin/codex-desktop %U"
   '';
 
   meta = codex-desktop.meta // {
