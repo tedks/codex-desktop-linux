@@ -9,11 +9,11 @@
 
 stdenvNoCC.mkDerivation rec {
   pname = "codex-desktop";
-  version = "26.924.22138";
+  version = "26.924.50649";
 
   src = fetchurl {
     url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-    hash = "sha256-zjuxqoLM3+MDetov2NGHeW6koNXtAx0OTsitzotwFOc=";
+    hash = "sha256-oPy4RcWhx6Gu5RNyh8c6Qxw6UcROzeabf6gzbcgiiGs=";
   };
 
   nativeBuildInputs = [
