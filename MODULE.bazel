@@ -22,6 +22,7 @@ crates.spec(package = "tempfile", version = "=3.27.0")
 crates.from_specs(
     name = "updater_crates",
     cargo_lockfile = "//:Cargo.lock",
+    lockfile = "//:cargo-bazel-lock.json",
     skip_cargo_lockfile_overwrite = True,
     supported_platform_triples = ["x86_64-unknown-linux-gnu"],
 )
