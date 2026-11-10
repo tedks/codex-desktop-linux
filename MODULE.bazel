@@ -1,0 +1,26 @@
+module(name = "codex_desktop_linux")
+
+bazel_dep(name = "rules_rust", version = "0.74.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["1.98.0"],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+# Keep this Bazel slice limited to the persisted-state module. The native
+# Cargo workspace retains the updater's full dependency and release graph.
+crates = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crates.spec(package = "anyhow", version = "=1.0.102")
+crates.spec(package = "chrono", version = "=0.4.44", features = ["clock", "serde"])
+crates.spec(package = "serde", version = "=1.0.228", features = ["derive"])
+crates.spec(package = "serde_json", version = "=1.0.149")
+crates.spec(package = "tempfile", version = "=3.27.0")
+crates.from_specs(
+    name = "updater_crates",
+    cargo_lockfile = "//:Cargo.lock",
+    supported_platform_triples = ["x86_64-unknown-linux-gnu"],
+)
+use_repo(crates, "updater_crates")

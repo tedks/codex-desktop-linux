@@ -1,0 +1,19 @@
+load("@rules_rust//rust:defs.bzl", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# Existing tests cover persisted JSON state compatibility and round trips.
+# This file has no installer, package manager, or network imports.
+rust_test(
+    name = "state_test",
+    srcs = ["src/state.rs"],
+    crate_root = "src/state.rs",
+    edition = "2021",
+    deps = [
+        "@updater_crates//:anyhow",
+        "@updater_crates//:chrono",
+        "@updater_crates//:serde",
+        "@updater_crates//:serde_json",
+        "@updater_crates//:tempfile",
+    ],
+)
