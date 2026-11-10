@@ -3,6 +3,7 @@ module(name = "codex_desktop_linux")
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+# Match updater/Cargo.toml's 2021 edition for this first test slice.
 rust.toolchain(
     edition = "2021",
     versions = ["1.98.0"],
